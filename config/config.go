@@ -1,25 +1,27 @@
 package config
 
 import (
-	"database/sql"
+	"Progetto_APL/models"
 	"log"
 
-	_ "github.com/go-sql-driver/mysql"
+	"gorm.io/driver/mysql"
+	"gorm.io/gorm"
 )
 
-var DB *sql.DB
+var DB *gorm.DB
 
 func LoadConfig() {
-	dsn := "root:password@tcp(127.0.0.1:3307)/dbname"
+	dsn := "root:password@tcp(127.0.0.1:3307)/db"
 	var err error
-	DB, err = sql.Open("mysql", dsn)
+	DB, err = gorm.Open(mysql.Open(dsn), &gorm.Config{})
 	if err != nil {
 		log.Fatal("Failed to connect to database:", err)
 	}
 
-	err = DB.Ping()
+	// Migrazione delle tabelle
+	err = DB.AutoMigrate(&models.User{}, &models.Project{}, &models.Code{}, &models.File{}, &models.Task{}, &models.Attached{})
 	if err != nil {
-		log.Fatal("Failed to ping database:", err)
+		log.Fatal("Failed to migrate database:", err)
 	}
 
 	log.Println("Connected to the database!")

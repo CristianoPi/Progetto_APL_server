@@ -1,0 +1,3 @@
+CREATE DATABASE db;
+GRANT ALL PRIVILEGES ON dbname.* TO 'user'@'localhost';
+FLUSH PRIVILEGES;
