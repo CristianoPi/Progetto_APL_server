@@ -11,7 +11,6 @@ CREATE TABLE IF NOT EXISTS progetto (
             id INT AUTO_INCREMENT,	
             descrizione TEXT NOT NULL,
             autore INT,
-		
             PRIMARY KEY (id),
             FOREIGN KEY (autore) REFERENCES utente(id)
         );

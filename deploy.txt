@@ -1,0 +1,7 @@
+assicurarsi di avere installato go e mysql nella propria macchina, il db gira nella porta 3307, per far funzionare tutto e necessario che ci sia un db di nome "db"
+eventualmente crearlo col comando sql: 
+                                        CREATE DATABASE db;
+                                        GRANT ALL PRIVILEGES ON db.* TO 'user'@'localhost';
+                                        FLUSH PRIVILEGES;	
+eseguire il server --> go run server.go
+eseguire il client di prova --> cd client --> go run client.go 

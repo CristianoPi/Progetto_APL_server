@@ -16,8 +16,20 @@ func SetupRouter() *http.ServeMux {
 	mux.HandleFunc("/login", controllers.LoginHandler)
 	mux.HandleFunc("/logout", controllers.LogoutHandler)
 
-	// rotte protette, Applica il middleware alla rotta /profile
+	//_______________________ROTTE PROTETTE CON MINDDLEWARE______________________
 	mux.Handle("/profile", middleware.AuthMiddleware(http.HandlerFunc(controllers.ProfileHandler)))
 
+	//rotte per gestione dei progetti
+	mux.Handle("/project", middleware.AuthMiddleware(http.HandlerFunc(controllers.CreateProject)))
+	mux.Handle("/projects/", middleware.AuthMiddleware(http.HandlerFunc(controllers.ListProjects)))
+	mux.Handle("/delete_project/{id}", middleware.AuthMiddleware(http.HandlerFunc(controllers.DeleteProject)))
+
+	//rotte per gestione dei task
+	mux.Handle("/task", middleware.AuthMiddleware(http.HandlerFunc(controllers.CreateTask)))
+	mux.Handle("/tasks/", middleware.AuthMiddleware(http.HandlerFunc(controllers.ListTasks)))
+	mux.Handle("/delete_task/{id}", middleware.AuthMiddleware(http.HandlerFunc(controllers.DeleteTask)))
+	//_____________________________________________________________________________
+
 	return mux
+
 }
