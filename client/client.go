@@ -1,73 +1,32 @@
 package main
 
 import (
+	"Progetto_APL/models"
 	"bytes"
 	"encoding/json"
 	"fmt"
 	"io"
 	"log"
+	"mime/multipart"
 	"net/http"
-	"net/http/cookiejar" //il client deve essere in grado di gestire i cookie per la sessione
+	"net/http/cookiejar"
 	"os"
-
-	"golang.org/x/crypto/bcrypt"
+	"path/filepath"
 )
-
-// !!DEVO CAPIRE COME RENDERE VISIBILE MODELS
-type User struct {
-	ID    uint   `gorm:"primarykey"`
-	Nome  string `json:"nome"`
-	Pwd   string `json:"pwd" gorm:"size:60"` // Campo per la password hashata
-	Email string `json:"email" gorm:"unique"`
-}
 
 type Credentials struct {
 	Email    string `json:"email"`
 	Password string `json:"password"`
 }
 
-type Project struct {
-	ID          uint   `gorm:"primarykey"`
-	Descrizione string `json:"descrizione"`
-	AutoreID    uint   `json:"autore"` // Chiave esterna che fa riferimento a User
-	Autore      User   `gorm:"foreignKey:AutoreID"`
-}
-
-type Code struct {
-	ID          uint   `gorm:"primarykey"`
-	Codice      string `json:"codice"`
-	Descrizione string `json:"descrizione"`
-	Statistiche string `json:"statistiche"`
-}
-
-type Task struct {
-	//Per permettere che alcune istanze di Task non abbiano un collegamento con Code, puoi rendere il campo CodeID opzionale.
-	//In Go, puoi fare questo utilizzando un puntatore al tipo uint per il campo CodeID. In questo modo, il campo può essere nil se non è presente un collegamento con Code.
-	ID           uint    `gorm:"primarykey"`
-	Nome         string  `json:"nome"`
-	Descrizione  string  `json:"descrizione"`
-	Commenti     string  `json:"commenti"`
-	AutoreID     uint    `json:"autore"` // Chiave esterna che fa riferimento a User
-	Autore       User    `gorm:"foreignKey:AutoreID"`
-	IncaricatoID *uint   `json:"incaricato"` // Chiave esterna che fa riferimento a User
-	Incaricato   User    `gorm:"foreignKey:IncaricatoID"`
-	CodeID       *uint   `json:"codice_sorgente_id"` // Chiave esterna che fa riferimento a Code
-	Code         Code    `gorm:"foreignKey:CodeID"`
-	ProjectID    *uint   `json:"progetto"` // Chiave esterna che fa riferimento a Project
-	Project      Project `gorm:"foreignKey:ProjectID"`
-}
-
 func main() {
-	baseURL := "http://localhost:8080"
-
-	jar, err := cookiejar.New(nil)
-	if err != nil {
-		log.Fatalf("Errore nella creazione del cookie jar: %v", err)
-	}
-
+	// Create a new HTTP client with cookie jar
+	jar, _ := cookiejar.New(nil)
 	client := &http.Client{
 		Jar: jar,
 	}
+
+	baseURL := "http://localhost:8080"
 
 	for {
 		fmt.Println("Menu:")
@@ -80,7 +39,11 @@ func main() {
 		fmt.Println("7. Crea un nuovo task")
 		fmt.Println("8. Elenca i tasks")
 		fmt.Println("9. Elimina un task")
-		fmt.Println("10. Esci")
+		fmt.Println("10. Crea un nuovo file")
+		fmt.Println("11. Elenca i file")
+		fmt.Println("12. Recupera un file tramite ID")
+		fmt.Println("13. Elimina un file")
+		fmt.Println("14. Esci")
 		fmt.Print("Scegli un'opzione: ")
 
 		var choice int
@@ -106,8 +69,16 @@ func main() {
 		case 9:
 			deleteTask(client, baseURL)
 		case 10:
+			createFile(client, baseURL)
+		case 11:
+			listFiles(client, baseURL)
+		case 12:
+			getFile(client, baseURL)
+		case 13:
+			deleteFile(client, baseURL)
+		case 14:
 			fmt.Println("Uscita...")
-			os.Exit(0)
+			return
 		default:
 			fmt.Println("Opzione non valida. Riprova.")
 		}
@@ -115,302 +86,324 @@ func main() {
 }
 
 func createUser(client *http.Client, baseURL string) {
-	var newUser User
-
-	fmt.Print("Inserisci il nome dell'utente: ")
-	fmt.Scan(&newUser.Nome)
-
-	fmt.Print("Inserisci l'email dell'utente: ")
-	fmt.Scan(&newUser.Email)
-
-	fmt.Print("Inserisci la password dell'utente: ")
-	var password string
-	fmt.Scan(&password)
-
-	// Cripta la password
-	hashedPwd, err := bcrypt.GenerateFromPassword([]byte(password), bcrypt.DefaultCost)
+	var newUser models.User
+	err := json.NewDecoder(os.Stdin).Decode(&newUser)
 	if err != nil {
-		log.Fatalf("Errore nella criptazione della password: %v", err)
-	}
-	newUser.Pwd = string(hashedPwd)
-
-	userJSON, err := json.Marshal(newUser)
-	if err != nil {
-		log.Fatalf("Errore nella serializzazione dell'utente: %v", err)
+		log.Fatalf("Unable to decode user input: %v", err)
 	}
 
-	resp, err := client.Post(baseURL+"/users", "application/json", bytes.NewBuffer(userJSON))
+	body, err := json.Marshal(newUser)
 	if err != nil {
-		log.Fatalf("Errore nella richiesta POST: %v", err)
+		log.Fatalf("Unable to marshal user: %v", err)
+	}
+
+	resp, err := client.Post(baseURL+"/users", "application/json", bytes.NewBuffer(body))
+	if err != nil {
+		log.Fatalf("Unable to send request: %v", err)
 	}
 	defer resp.Body.Close()
 
-	body, err := io.ReadAll(resp.Body)
-	if err != nil {
-		log.Fatalf("Errore nella lettura del corpo della risposta: %v", err)
+	if resp.StatusCode != http.StatusCreated {
+		log.Fatalf("Failed to create user: %v", resp.Status)
 	}
 
-	if resp.StatusCode != http.StatusCreated {
-		log.Fatalf("Creazione utente fallita. Stato HTTP: %d, Messaggio: %s", resp.StatusCode, string(body))
-	}
-	fmt.Println("Utente creato con successo.")
+	fmt.Println("User created successfully")
 }
 
 func getUser(client *http.Client, baseURL string) {
-	fmt.Print("Inserisci l'email dell'utente: ")
 	var email string
+	fmt.Print("Inserisci l'email dell'utente: ")
 	fmt.Scan(&email)
 
-	url := fmt.Sprintf("%s/users/%s", baseURL, email)
-	getResp, err := client.Get(url)
+	resp, err := client.Get(fmt.Sprintf("%s/users/%s", baseURL, email))
 	if err != nil {
-		log.Fatalf("Errore nella richiesta GET: %v", err)
+		log.Fatalf("Unable to send request: %v", err)
 	}
-	defer getResp.Body.Close()
+	defer resp.Body.Close()
 
-	getBody, err := io.ReadAll(getResp.Body)
+	if resp.StatusCode != http.StatusOK {
+		log.Fatalf("Failed to get user: %v", resp.Status)
+	}
+
+	var user models.User
+	err = json.NewDecoder(resp.Body).Decode(&user)
 	if err != nil {
-		log.Fatalf("Errore nella lettura del corpo della risposta: %v", err)
+		log.Fatalf("Unable to decode response: %v", err)
 	}
 
-	if getResp.StatusCode != http.StatusOK {
-		log.Fatalf("Recupero utente fallito. Stato HTTP: %d, Messaggio: %s", getResp.StatusCode, string(getBody))
-	}
-
-	fmt.Printf("Risposta al recupero dell'utente: %s\n", getBody)
-
-	var fetchedUser User
-	if err := json.Unmarshal(getBody, &fetchedUser); err != nil {
-		log.Fatalf("Errore nel parsing della risposta JSON: %v", err)
-	}
-
-	fmt.Printf("Utente recuperato: %+v\n", fetchedUser)
+	fmt.Printf("User: %+v\n", user)
 }
 
 func login(client *http.Client, baseURL string) {
 	var creds Credentials
-
-	fmt.Print("Inserisci l'email: ")
-	fmt.Scan(&creds.Email)
-
-	fmt.Print("Inserisci la password: ")
-	fmt.Scan(&creds.Password)
-
-	credsJSON, err := json.Marshal(creds)
+	err := json.NewDecoder(os.Stdin).Decode(&creds)
 	if err != nil {
-		log.Fatalf("Errore nella serializzazione delle credenziali: %v", err)
+		log.Fatalf("Unable to decode credentials input: %v", err)
 	}
 
-	resp, err := client.Post(baseURL+"/login", "application/json", bytes.NewBuffer(credsJSON))
+	body, err := json.Marshal(creds)
 	if err != nil {
-		log.Fatalf("Errore nella richiesta POST: %v", err)
+		log.Fatalf("Unable to marshal credentials: %v", err)
+	}
+
+	resp, err := client.Post(baseURL+"/login", "application/json", bytes.NewBuffer(body))
+	if err != nil {
+		log.Fatalf("Unable to send request: %v", err)
 	}
 	defer resp.Body.Close()
 
-	body, err := io.ReadAll(resp.Body)
-	if err != nil {
-		log.Fatalf("Errore nella lettura del corpo della risposta: %v", err)
+	if resp.StatusCode != http.StatusOK {
+		log.Fatalf("Failed to login: %v", resp.Status)
 	}
 
-	if resp.StatusCode != http.StatusOK {
-		log.Fatalf("Login fallito. Stato HTTP: %d, Messaggio: %s", resp.StatusCode, string(body))
-	}
-	fmt.Println("Login effettuato con successo.")
-	fmt.Printf("Messaggio: %s\n", string(body))
+	fmt.Println("Login successful")
 }
 
 func createProject(client *http.Client, baseURL string) {
-	var newProject Project
-
-	fmt.Print("Inserisci la descrizione del progetto: ")
-	fmt.Scan(&newProject.Descrizione)
-
-	projectJSON, err := json.Marshal(newProject)
+	var newProject models.Project
+	err := json.NewDecoder(os.Stdin).Decode(&newProject)
 	if err != nil {
-		log.Fatalf("Errore nella serializzazione del progetto: %v", err)
+		log.Fatalf("Unable to decode project input: %v", err)
 	}
 
-	resp, err := client.Post(baseURL+"/project", "application/json", bytes.NewBuffer(projectJSON))
+	body, err := json.Marshal(newProject)
 	if err != nil {
-		log.Fatalf("Errore nella richiesta POST: %v", err)
+		log.Fatalf("Unable to marshal project: %v", err)
+	}
+
+	resp, err := client.Post(baseURL+"/projects", "application/json", bytes.NewBuffer(body))
+	if err != nil {
+		log.Fatalf("Unable to send request: %v", err)
 	}
 	defer resp.Body.Close()
 
-	body, err := io.ReadAll(resp.Body)
-	if err != nil {
-		log.Fatalf("Errore nella lettura del corpo della risposta: %v", err)
+	if resp.StatusCode != http.StatusCreated {
+		log.Fatalf("Failed to create project: %v", resp.Status)
 	}
 
-	if resp.StatusCode != http.StatusCreated {
-		log.Fatalf("Creazione progetto fallita. Stato HTTP: %d, Messaggio: %s", resp.StatusCode, string(body))
-	}
-	fmt.Println("Progetto creato con successo.")
+	fmt.Println("Project created successfully")
 }
 
 func listProjects(client *http.Client, baseURL string) {
 	resp, err := client.Get(baseURL + "/projects")
 	if err != nil {
-		log.Fatalf("Errore nella richiesta GET: %v", err)
+		log.Fatalf("Unable to send request: %v", err)
 	}
 	defer resp.Body.Close()
 
-	body, err := io.ReadAll(resp.Body)
-	if err != nil {
-		log.Fatalf("Errore nella lettura del corpo della risposta: %v", err)
-	}
-
 	if resp.StatusCode != http.StatusOK {
-		log.Fatalf("Elenco progetti fallito. Stato HTTP: %d, Messaggio: %s", resp.StatusCode, string(body))
+		log.Fatalf("Failed to list projects: %v", resp.Status)
 	}
 
-	fmt.Printf("Risposta all'elenco dei progetti: %s\n", body)
-
-	var projects []Project
-	if err := json.Unmarshal(body, &projects); err != nil {
-		log.Fatalf("Errore nel parsing della risposta JSON: %v", err)
+	var projects []models.Project
+	err = json.NewDecoder(resp.Body).Decode(&projects)
+	if err != nil {
+		log.Fatalf("Unable to decode response: %v", err)
 	}
 
-	fmt.Println("Progetti recuperati:")
-	for _, project := range projects {
-		fmt.Printf("ID: %d, Descrizione: %s\n", project.ID, project.Descrizione)
-	}
+	fmt.Printf("Projects: %+v\n", projects)
 }
 
 func deleteProject(client *http.Client, baseURL string) {
-	fmt.Print("Inserisci l'ID del progetto da eliminare: ")
-	var id int
+	var id uint
+	fmt.Print("Inserisci l'ID del progetto: ")
 	fmt.Scan(&id)
 
-	req, err := http.NewRequest("DELETE", fmt.Sprintf("%s/delete_project/%d", baseURL, id), nil)
-
+	req, err := http.NewRequest("DELETE", fmt.Sprintf("%s/projects/%d", baseURL, id), nil)
 	if err != nil {
-		log.Fatalf("Errore nella creazione della richiesta DELETE: %v", err)
+		log.Fatalf("Unable to create request: %v", err)
 	}
 
 	resp, err := client.Do(req)
 	if err != nil {
-		log.Fatalf("Errore nella richiesta DELETE: %v", err)
+		log.Fatalf("Unable to send request: %v", err)
 	}
 	defer resp.Body.Close()
 
-	body, err := io.ReadAll(resp.Body)
-	if err != nil {
-		log.Fatalf("Errore nella lettura del corpo della risposta: %v", err)
+	if resp.StatusCode != http.StatusOK {
+		log.Fatalf("Failed to delete project: %v", resp.Status)
 	}
 
-	if resp.StatusCode != http.StatusOK {
-		log.Fatalf("Eliminazione progetto fallita. Stato HTTP: %d, Messaggio: %s", resp.StatusCode, string(body))
-	}
-	fmt.Println("Progetto eliminato con successo.")
+	fmt.Println("Project deleted successfully")
 }
 
 func createTask(client *http.Client, baseURL string) {
-	var newTask Task
-
-	fmt.Print("Inserisci il nome del task: ")
-	fmt.Scan(&newTask.Nome)
-
-	fmt.Print("Inserisci la descrizione del task: ")
-	fmt.Scan(&newTask.Descrizione)
-
-	fmt.Print("Inserisci i commenti del task: ")
-	fmt.Scan(&newTask.Commenti)
-
-	fmt.Print("Inserisci l'ID dell'incaricato del task (può essere vuoto): ")
-	var incaricatoID uint
-	_, err := fmt.Scan(&incaricatoID)
-	if err == nil {
-		newTask.IncaricatoID = &incaricatoID
-	}
-
-	fmt.Print("Inserisci l'ID del codice sorgente del task (può essere vuoto): ")
-	var codeID uint
-	_, err = fmt.Scan(&codeID)
-	if err == nil {
-		newTask.CodeID = &codeID
-	}
-
-	fmt.Print("Inserisci l'ID del progetto del task (può essere vuoto): ")
-	var projectID uint
-	_, err = fmt.Scan(&projectID)
-	if err == nil {
-		newTask.ProjectID = &projectID
-	}
-
-	taskJSON, err := json.Marshal(newTask)
+	var newTask models.Task
+	err := json.NewDecoder(os.Stdin).Decode(&newTask)
 	if err != nil {
-		log.Fatalf("Errore nella serializzazione del task: %v", err)
+		log.Fatalf("Unable to decode task input: %v", err)
 	}
 
-	resp, err := client.Post(baseURL+"/task", "application/json", bytes.NewBuffer(taskJSON))
+	body, err := json.Marshal(newTask)
 	if err != nil {
-		log.Fatalf("Errore nella richiesta POST: %v", err)
+		log.Fatalf("Unable to marshal task: %v", err)
+	}
+
+	resp, err := client.Post(baseURL+"/tasks", "application/json", bytes.NewBuffer(body))
+	if err != nil {
+		log.Fatalf("Unable to send request: %v", err)
 	}
 	defer resp.Body.Close()
 
-	body, err := io.ReadAll(resp.Body)
-	if err != nil {
-		log.Fatalf("Errore nella lettura del corpo della risposta: %v", err)
+	if resp.StatusCode != http.StatusCreated {
+		log.Fatalf("Failed to create task: %v", resp.Status)
 	}
 
-	if resp.StatusCode != http.StatusCreated {
-		log.Fatalf("Creazione task fallita. Stato HTTP: %d, Messaggio: %s", resp.StatusCode, string(body))
-	}
-	fmt.Println("Task creato con successo.")
+	fmt.Println("Task created successfully")
 }
 
 func listTasks(client *http.Client, baseURL string) {
 	resp, err := client.Get(baseURL + "/tasks")
 	if err != nil {
-		log.Fatalf("Errore nella richiesta GET: %v", err)
+		log.Fatalf("Unable to send request: %v", err)
 	}
 	defer resp.Body.Close()
 
-	body, err := io.ReadAll(resp.Body)
-	if err != nil {
-		log.Fatalf("Errore nella lettura del corpo della risposta: %v", err)
-	}
-
 	if resp.StatusCode != http.StatusOK {
-		log.Fatalf("Elenco tasks fallito. Stato HTTP: %d, Messaggio: %s", resp.StatusCode, string(body))
+		log.Fatalf("Failed to list tasks: %v", resp.Status)
 	}
 
-	fmt.Printf("Risposta all'elenco dei tasks: %s\n", body)
-
-	var tasks []Task
-	if err := json.Unmarshal(body, &tasks); err != nil {
-		log.Fatalf("Errore nel parsing della risposta JSON: %v", err)
+	var tasks []models.Task
+	err = json.NewDecoder(resp.Body).Decode(&tasks)
+	if err != nil {
+		log.Fatalf("Unable to decode response: %v", err)
 	}
 
-	fmt.Println("Tasks recuperati:")
-	for _, task := range tasks {
-		fmt.Printf("ID: %d, Nome: %s, Descrizione: %s\n", task.ID, task.Nome, task.Descrizione)
-	}
+	fmt.Printf("Tasks: %+v\n", tasks)
 }
 
 func deleteTask(client *http.Client, baseURL string) {
-	fmt.Print("Inserisci l'ID del task da eliminare: ")
-	var id int
+	var id uint
+	fmt.Print("Inserisci l'ID del task: ")
 	fmt.Scan(&id)
 
-	req, err := http.NewRequest("DELETE", fmt.Sprintf("%s/delete_task/%d", baseURL, id), nil)
+	req, err := http.NewRequest("DELETE", fmt.Sprintf("%s/tasks/%d", baseURL, id), nil)
 	if err != nil {
-		log.Fatalf("Errore nella creazione della richiesta DELETE: %v", err)
+		log.Fatalf("Unable to create request: %v", err)
 	}
 
 	resp, err := client.Do(req)
 	if err != nil {
-		log.Fatalf("Errore nella richiesta DELETE: %v", err)
+		log.Fatalf("Unable to send request: %v", err)
 	}
 	defer resp.Body.Close()
 
-	body, err := io.ReadAll(resp.Body)
-	if err != nil {
-		log.Fatalf("Errore nella lettura del corpo della risposta: %v", err)
+	if resp.StatusCode != http.StatusOK {
+		log.Fatalf("Failed to delete task: %v", resp.Status)
 	}
 
-	if resp.StatusCode != http.StatusOK {
-		log.Fatalf("Eliminazione task fallita. Stato HTTP: %d, Messaggio: %s", resp.StatusCode, string(body))
+	fmt.Println("Task deleted successfully")
+}
+
+func createFile(client *http.Client, baseURL string) {
+	filePath := "path/to/your/file.txt" // Replace with the path to your file
+	file, err := os.Open(filePath)
+	if err != nil {
+		log.Fatalf("Unable to open file: %v", err)
 	}
-	fmt.Println("Task eliminato con successo.")
+	defer file.Close()
+
+	body := &bytes.Buffer{}
+	writer := multipart.NewWriter(body)
+	part, err := writer.CreateFormFile("file", filepath.Base(file.Name()))
+	if err != nil {
+		log.Fatalf("Unable to create form file: %v", err)
+	}
+	_, err = io.Copy(part, file)
+	if err != nil {
+		log.Fatalf("Unable to copy file: %v", err)
+	}
+	writer.WriteField("descrizione", "Test file description")
+	writer.Close()
+
+	req, err := http.NewRequest("POST", baseURL+"/files", body)
+	if err != nil {
+		log.Fatalf("Unable to create request: %v", err)
+	}
+	req.Header.Set("Content-Type", writer.FormDataContentType())
+
+	resp, err := client.Do(req)
+	if err != nil {
+		log.Fatalf("Unable to send request: %v", err)
+	}
+	defer resp.Body.Close()
+
+	if resp.StatusCode != http.StatusOK {
+		log.Fatalf("Failed to create file: %v", resp.Status)
+	}
+
+	var newFile models.File
+	err = json.NewDecoder(resp.Body).Decode(&newFile)
+	if err != nil {
+		log.Fatalf("Unable to decode response: %v", err)
+	}
+
+	fmt.Printf("File created: %+v\n", newFile)
+}
+
+func listFiles(client *http.Client, baseURL string) {
+	resp, err := client.Get(baseURL + "/files")
+	if err != nil {
+		log.Fatalf("Unable to send request: %v", err)
+	}
+	defer resp.Body.Close()
+
+	if resp.StatusCode != http.StatusOK {
+		log.Fatalf("Failed to list files: %v", resp.Status)
+	}
+
+	var files []models.File
+	err = json.NewDecoder(resp.Body).Decode(&files)
+	if err != nil {
+		log.Fatalf("Unable to decode response: %v", err)
+	}
+
+	fmt.Printf("Files: %+v\n", files)
+}
+
+func getFile(client *http.Client, baseURL string) {
+	var id uint
+	fmt.Print("Inserisci l'ID del file: ")
+	fmt.Scan(&id)
+
+	resp, err := client.Get(fmt.Sprintf("%s/files/%d", baseURL, id))
+	if err != nil {
+		log.Fatalf("Unable to send request: %v", err)
+	}
+	defer resp.Body.Close()
+
+	if resp.StatusCode != http.StatusOK {
+		log.Fatalf("Failed to get file: %v", resp.Status)
+	}
+
+	var file models.File
+	err = json.NewDecoder(resp.Body).Decode(&file)
+	if err != nil {
+		log.Fatalf("Unable to decode response: %v", err)
+	}
+
+	fmt.Printf("File: %+v\n", file)
+}
+
+func deleteFile(client *http.Client, baseURL string) {
+	var id uint
+	fmt.Print("Inserisci l'ID del file: ")
+	fmt.Scan(&id)
+
+	req, err := http.NewRequest("DELETE", fmt.Sprintf("%s/files/%d", baseURL, id), nil)
+	if err != nil {
+		log.Fatalf("Unable to create request: %v", err)
+	}
+
+	resp, err := client.Do(req)
+	if err != nil {
+		log.Fatalf("Unable to send request: %v", err)
+	}
+	defer resp.Body.Close()
+
+	if resp.StatusCode != http.StatusOK {
+		log.Fatalf("Failed to delete file: %v", resp.Status)
+	}
+
+	fmt.Println("File deleted successfully")
 }
