@@ -22,7 +22,14 @@ func SetupRouter() *http.ServeMux {
 
 	// Rotte per gestione dei progetti
 	mux.Handle("/project", middleware.AuthMiddleware(http.HandlerFunc(controllers.CreateProject)))
+	mux.Handle("/projects/", middleware.AuthMiddleware(http.HandlerFunc(controllers.ListProjects)))
+	mux.Handle("/delete_project/{id}", middleware.AuthMiddleware(http.HandlerFunc(controllers.DeleteProject)))
 
+	//rotte per gestione dei task
+	mux.Handle("/task", middleware.AuthMiddleware(http.HandlerFunc(controllers.CreateTask)))
+	mux.Handle("/tasks/", middleware.AuthMiddleware(http.HandlerFunc(controllers.ListTasks)))
+	mux.Handle("/delete_task/{id}", middleware.AuthMiddleware(http.HandlerFunc(controllers.DeleteTask)))
+	//_____________________________________________________________________________
 	// Rotte per gestione dei file
 	mux.Handle("/files", middleware.AuthMiddleware(http.HandlerFunc(controllers.CreateFile)))
 	mux.Handle("/files/list", middleware.AuthMiddleware(http.HandlerFunc(controllers.ListFiles)))

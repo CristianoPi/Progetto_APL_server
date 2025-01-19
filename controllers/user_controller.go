@@ -65,10 +65,10 @@ func LoginHandler(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, fmt.Sprintf("Errore nel salvataggio della sessione: %v", err), http.StatusInternalServerError)
 		return
 	}
-	http.Redirect(w, r, "/profile", http.StatusFound)
+	log.Println("Utente autenticato con successo")
 }
 
-func LogoutHandler(w http.ResponseWriter, r *http.Request) { //da provare
+func LogoutHandler(w http.ResponseWriter, r *http.Request) {
 	session, err := store.Get(r, "session-name")
 	if err != nil {
 		http.Error(w, "Errore nel recupero della sessione", http.StatusInternalServerError)
@@ -77,9 +77,12 @@ func LogoutHandler(w http.ResponseWriter, r *http.Request) { //da provare
 
 	// Elimina i dati della sessione
 	session.Values["user"] = nil
-	session.Save(r, w)
-
-	http.Redirect(w, r, "/", http.StatusFound)
+	session.Options.MaxAge = -1 // Imposta MaxAge a -1 per eliminare il cookie
+	err = session.Save(r, w)
+	if err != nil {
+		http.Error(w, "Errore nel salvataggio della sessione", http.StatusInternalServerError)
+		return
+	}
 }
 
 func ProfileHandler(w http.ResponseWriter, r *http.Request) {

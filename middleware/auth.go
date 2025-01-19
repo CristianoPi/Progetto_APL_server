@@ -36,8 +36,8 @@ func AuthMiddleware(next http.Handler) http.Handler {
 		user, ok := session.Values["user"].(models.User)
 		log.Printf("Valore della sessione recuperato: %v, OK: %v", user, ok)
 		if !ok || user.ID == 0 {
-			log.Println("AuthMiddleware: Utente non autenticato, reindirizzamento a /login")
-			http.Redirect(w, r, "/login", http.StatusFound)
+			log.Println("AuthMiddleware: Utente non autenticato")
+			// http.Redirect(w, r, "/login", http.StatusFound)
 			return
 		}
 
