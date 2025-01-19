@@ -117,22 +117,28 @@ func ProfileHandler(w http.ResponseWriter, r *http.Request) {
 }
 
 func CreateUser(w http.ResponseWriter, r *http.Request) {
+	log.Println("Inizio creazione utente")
+
 	var user models.User
 	err := json.NewDecoder(r.Body).Decode(&user)
 	if err != nil {
+		log.Printf("Errore nella decodifica del corpo della richiesta: %v", err)
 		http.Error(w, err.Error(), http.StatusBadRequest)
 		return
 	}
+	log.Printf("Dati utente decodificati: %+v", user)
 
 	result := config.DB.Create(&user)
 	if result.Error != nil {
+		log.Printf("Errore nella creazione dell'utente nel database: %v", result.Error)
 		http.Error(w, result.Error.Error(), http.StatusInternalServerError)
 		return
 	}
+	log.Println("Utente creato con successo")
 
 	w.WriteHeader(http.StatusCreated)
+	log.Println("Risposta inviata con successo")
 }
-
 func GetUser(w http.ResponseWriter, r *http.Request) {
 	email := r.URL.Path[len("/users/"):]
 	var user models.User

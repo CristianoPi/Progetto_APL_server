@@ -25,9 +25,8 @@ func SetupRouter() *http.ServeMux {
 
 	// Rotte per gestione dei file
 	mux.Handle("/files", middleware.AuthMiddleware(http.HandlerFunc(controllers.CreateFile)))
-	mux.Handle("/files/", middleware.AuthMiddleware(http.HandlerFunc(controllers.ListFiles)))
-	mux.Handle("/files/", middleware.AuthMiddleware(http.HandlerFunc(controllers.GetFile)))
-	mux.Handle("/files/", middleware.AuthMiddleware(http.HandlerFunc(controllers.DeleteFile)))
-
+	mux.Handle("/files/list", middleware.AuthMiddleware(http.HandlerFunc(controllers.ListFiles)))
+	mux.Handle("/files/get", middleware.AuthMiddleware(http.HandlerFunc(controllers.GetFile)))
+	mux.Handle("/files/delete", middleware.AuthMiddleware(http.HandlerFunc(controllers.DeleteFile)))
 	return mux
 }

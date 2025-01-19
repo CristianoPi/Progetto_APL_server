@@ -12,5 +12,4 @@ func main() {
 	config.LoadConfig() // Connetti al database utilizzando GORM
 	router := routes.SetupRouter()
 	log.Fatal(http.ListenAndServe(":8080", router))
-
 }

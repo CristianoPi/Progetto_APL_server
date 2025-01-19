@@ -87,10 +87,12 @@ func main() {
 
 func createUser(client *http.Client, baseURL string) {
 	var newUser models.User
-	err := json.NewDecoder(os.Stdin).Decode(&newUser)
-	if err != nil {
-		log.Fatalf("Unable to decode user input: %v", err)
-	}
+	fmt.Print("Inserisci il nome dell'utente: ")
+	fmt.Scan(&newUser.Nome)
+	fmt.Print("Inserisci l'email dell'utente: ")
+	fmt.Scan(&newUser.Email)
+	fmt.Print("Inserisci la password dell'utente: ")
+	fmt.Scan(&newUser.Pwd)
 
 	body, err := json.Marshal(newUser)
 	if err != nil {
@@ -136,10 +138,10 @@ func getUser(client *http.Client, baseURL string) {
 
 func login(client *http.Client, baseURL string) {
 	var creds Credentials
-	err := json.NewDecoder(os.Stdin).Decode(&creds)
-	if err != nil {
-		log.Fatalf("Unable to decode credentials input: %v", err)
-	}
+	fmt.Print("Inserisci l'email: ")
+	fmt.Scan(&creds.Email)
+	fmt.Print("Inserisci la password: ")
+	fmt.Scan(&creds.Password)
 
 	body, err := json.Marshal(creds)
 	if err != nil {
@@ -161,10 +163,10 @@ func login(client *http.Client, baseURL string) {
 
 func createProject(client *http.Client, baseURL string) {
 	var newProject models.Project
-	err := json.NewDecoder(os.Stdin).Decode(&newProject)
-	if err != nil {
-		log.Fatalf("Unable to decode project input: %v", err)
-	}
+	fmt.Print("Inserisci la descrizione del progetto: ")
+	fmt.Scan(&newProject.Descrizione)
+	fmt.Print("Inserisci l'ID dell'autore: ")
+	fmt.Scan(&newProject.AutoreID)
 
 	body, err := json.Marshal(newProject)
 	if err != nil {
@@ -229,10 +231,10 @@ func deleteProject(client *http.Client, baseURL string) {
 
 func createTask(client *http.Client, baseURL string) {
 	var newTask models.Task
-	err := json.NewDecoder(os.Stdin).Decode(&newTask)
-	if err != nil {
-		log.Fatalf("Unable to decode task input: %v", err)
-	}
+	fmt.Print("Inserisci la descrizione del task: ")
+	fmt.Scan(&newTask.Descrizione)
+	fmt.Print("Inserisci l'ID dell'autore: ")
+	fmt.Scan(&newTask.AutoreID)
 
 	body, err := json.Marshal(newTask)
 	if err != nil {
@@ -296,7 +298,10 @@ func deleteTask(client *http.Client, baseURL string) {
 }
 
 func createFile(client *http.Client, baseURL string) {
-	filePath := "path/to/your/file.txt" // Replace with the path to your file
+	var filePath string
+	fmt.Print("Inserisci il percorso del file: ")
+	fmt.Scan(&filePath)
+
 	file, err := os.Open(filePath)
 	if err != nil {
 		log.Fatalf("Unable to open file: %v", err)
@@ -313,7 +318,10 @@ func createFile(client *http.Client, baseURL string) {
 	if err != nil {
 		log.Fatalf("Unable to copy file: %v", err)
 	}
-	writer.WriteField("descrizione", "Test file description")
+	fmt.Print("Inserisci la descrizione del file: ")
+	var descrizione string
+	fmt.Scan(&descrizione)
+	writer.WriteField("descrizione", descrizione)
 	writer.Close()
 
 	req, err := http.NewRequest("POST", baseURL+"/files", body)
