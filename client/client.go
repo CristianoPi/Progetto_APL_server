@@ -12,6 +12,8 @@ import (
 	"net/http/cookiejar"
 	"os"
 	"path/filepath"
+
+	"golang.org/x/crypto/bcrypt"
 )
 
 type Credentials struct {
@@ -92,8 +94,17 @@ func createUser(client *http.Client, baseURL string) {
 	fmt.Print("Inserisci l'email dell'utente: ")
 	fmt.Scan(&newUser.Email)
 	fmt.Print("Inserisci la password dell'utente: ")
-	fmt.Scan(&newUser.Pwd)
+	var password string
+	fmt.Scan(&password)
 
+	// Cripta la password
+	hashedPwd, err := bcrypt.GenerateFromPassword([]byte(password), bcrypt.DefaultCost)
+	if err != nil {
+		log.Fatalf("Errore nella criptazione della password: %v", err)
+	}
+
+	newUser.Pwd = string(hashedPwd)
+	fmt.Print(newUser.Pwd)
 	body, err := json.Marshal(newUser)
 	if err != nil {
 		log.Fatalf("Unable to marshal user: %v", err)
