@@ -102,9 +102,8 @@ func createUser(client *http.Client, baseURL string) {
 	if err != nil {
 		log.Fatalf("Errore nella criptazione della password: %v", err)
 	}
-
 	newUser.Pwd = string(hashedPwd)
-	fmt.Print(newUser.Pwd)
+
 	body, err := json.Marshal(newUser)
 	if err != nil {
 		log.Fatalf("Unable to marshal user: %v", err)
@@ -176,8 +175,13 @@ func createProject(client *http.Client, baseURL string) {
 	var newProject models.Project
 	fmt.Print("Inserisci la descrizione del progetto: ")
 	fmt.Scan(&newProject.Descrizione)
-	fmt.Print("Inserisci l'ID dell'autore: ")
-	fmt.Scan(&newProject.AutoreID)
+
+	// Recupera l'ID dell'utente dalla sessione
+	userID, err := getUserIDFromSession(client, baseURL)
+	if err != nil {
+		log.Fatalf("Unable to get user ID from session: %v", err)
+	}
+	newProject.AutoreID = userID
 
 	body, err := json.Marshal(newProject)
 	if err != nil {
@@ -244,8 +248,13 @@ func createTask(client *http.Client, baseURL string) {
 	var newTask models.Task
 	fmt.Print("Inserisci la descrizione del task: ")
 	fmt.Scan(&newTask.Descrizione)
-	fmt.Print("Inserisci l'ID dell'autore: ")
-	fmt.Scan(&newTask.AutoreID)
+
+	// Recupera l'ID dell'utente dalla sessione
+	userID, err := getUserIDFromSession(client, baseURL)
+	if err != nil {
+		log.Fatalf("Unable to get user ID from session: %v", err)
+	}
+	newTask.AutoreID = userID
 
 	body, err := json.Marshal(newTask)
 	if err != nil {
@@ -425,4 +434,24 @@ func deleteFile(client *http.Client, baseURL string) {
 	}
 
 	fmt.Println("File deleted successfully")
+}
+
+func getUserIDFromSession(client *http.Client, baseURL string) (uint, error) {
+	resp, err := client.Get(baseURL + "/profile")
+	if err != nil {
+		return 0, fmt.Errorf("unable to send request: %v", err)
+	}
+	defer resp.Body.Close()
+
+	if resp.StatusCode != http.StatusOK {
+		return 0, fmt.Errorf("failed to get user profile: %v", resp.Status)
+	}
+
+	var user models.User
+	err = json.NewDecoder(resp.Body).Decode(&user)
+	if err != nil {
+		return 0, fmt.Errorf("unable to decode response: %v", err)
+	}
+
+	return user.ID, nil
 }
