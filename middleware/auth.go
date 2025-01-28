@@ -23,25 +23,25 @@ func init() {
 
 func AuthMiddleware(next http.Handler) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		log.Println("AuthMiddleware: Inizio gestione richiesta")
+		log.Println("AUTH: Inizio gestione richiesta")
 
 		session, err := store.Get(r, "session-name")
 		if err != nil {
-			log.Printf("Errore nel recupero della sessione: %v", err)
+			log.Printf("AUTH: Errore nel recupero della sessione: %v", err)
 			http.Error(w, "Errore nel recupero della sessione", http.StatusInternalServerError)
 			return
 		}
 
 		// Controlla se l'utente è loggato
 		user, ok := session.Values["user"].(models.User)
-		log.Printf("Valore della sessione recuperato: %v, OK: %v", user, ok)
+		log.Printf("AUTH: Valore della sessione recuperato: %v, OK: %v", user, ok)
 		if !ok || user.ID == 0 {
-			log.Println("AuthMiddleware: Utente non autenticato")
+			log.Println("AUTH: Utente non autenticato")
 			// http.Redirect(w, r, "/login", http.StatusFound)
 			return
 		}
 
-		log.Printf("AuthMiddleware: Utente autenticato: %s", user.Nome)
+		log.Printf("AUTH: Utente autenticato: %s", user.Username)
 		// Se l'utente è loggato, passa al prossimo handler
 		next.ServeHTTP(w, r)
 	})

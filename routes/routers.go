@@ -10,8 +10,11 @@ func SetupRouter() *http.ServeMux {
 	mux := http.NewServeMux()
 
 	// Rotte senza accesso
-	mux.HandleFunc("/users", controllers.CreateUser) // bisogna dare in input nelle post il json --> guardare client.go per esempio
-	mux.HandleFunc("/users/", controllers.GetUser)   // get user data la mail tipo: http://localhost:8080/users/mario.rossi1@example.com
+	mux.HandleFunc("/register", controllers.CreateUser) // bisogna dare in input nelle post il json --> guardare client.go per esempio
+	mux.HandleFunc("/users/", controllers.GetUser)      // get user data la mail tipo: http://localhost:8080/users/mario.rossi1@example.com
+	mux.HandleFunc("/author/", controllers.GetUserByID)
+	mux.HandleFunc("/check-username/", controllers.CheckUsername)
+	mux.HandleFunc("/forgot-password/", controllers.ForgotPassword)
 
 	// Rotte per gestire l'accesso
 	mux.HandleFunc("/login", controllers.LoginHandler)
@@ -19,11 +22,12 @@ func SetupRouter() *http.ServeMux {
 
 	// Rotte protette con middleware
 	mux.Handle("/profile", middleware.AuthMiddleware(http.HandlerFunc(controllers.ProfileHandler)))
+	mux.Handle("/changepwd", middleware.AuthMiddleware(http.HandlerFunc(controllers.Changepwd)))
 
 	// Rotte per gestione dei progetti
 	mux.Handle("/project", middleware.AuthMiddleware(http.HandlerFunc(controllers.CreateProject)))
 	mux.Handle("/projects/", middleware.AuthMiddleware(http.HandlerFunc(controllers.ListProjects)))
-	mux.Handle("/delete_project/{id}", middleware.AuthMiddleware(http.HandlerFunc(controllers.DeleteProject)))
+	mux.Handle("/delete_project/", middleware.AuthMiddleware(http.HandlerFunc(controllers.DeleteProject)))
 
 	//rotte per gestione dei task
 	mux.Handle("/task", middleware.AuthMiddleware(http.HandlerFunc(controllers.CreateTask)))

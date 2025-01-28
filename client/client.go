@@ -6,6 +6,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"io"
+	"io/ioutil"
 	"log"
 	"mime/multipart"
 	"net/http"
@@ -94,7 +95,7 @@ func main() {
 func createUser(client *http.Client, baseURL string) {
 	var newUser models.User
 	fmt.Print("Inserisci il nome dell'utente: ")
-	fmt.Scan(&newUser.Nome)
+	fmt.Scan(&newUser.Username)
 	fmt.Print("Inserisci l'email dell'utente: ")
 	fmt.Scan(&newUser.Email)
 	fmt.Print("Inserisci la password dell'utente: ")
@@ -185,6 +186,8 @@ func createProject(client *http.Client, baseURL string) {
 	if err != nil {
 		log.Fatalf("Unable to get user ID from session: %v", err)
 	}
+	// ...existing code...
+
 	newProject.AutoreID = userID
 
 	body, err := json.Marshal(newProject)
@@ -192,12 +195,32 @@ func createProject(client *http.Client, baseURL string) {
 		log.Fatalf("Unable to marshal project: %v", err)
 	}
 
-	resp, err := client.Post(baseURL+"/projects", "application/json", bytes.NewBuffer(body))
+	resp, err := client.Post(baseURL+"/project", "application/json", bytes.NewBuffer(body))
 	if err != nil {
 		log.Fatalf("Unable to send request: %v", err)
 	}
 	defer resp.Body.Close()
 
+	// Leggi il corpo della risposta
+	responseBody, err := ioutil.ReadAll(resp.Body)
+	if err != nil {
+		log.Fatalf("Unable to read response body: %v", err)
+	}
+
+	// Logga il corpo della risposta
+	log.Printf("Response body: %s", responseBody)
+
+	if resp.StatusCode != http.StatusCreated {
+		log.Fatalf("Failed to create project: %v", resp.Status)
+	}
+
+	// Tenta di decodificare la risposta
+	var result map[string]interface{}
+	if err := json.Unmarshal(responseBody, &result); err != nil {
+		log.Fatalf("Unable to decode response: %v", err)
+	}
+
+	// ...existing code...
 	if resp.StatusCode != http.StatusCreated {
 		log.Fatalf("Failed to create project: %v", resp.Status)
 	}
