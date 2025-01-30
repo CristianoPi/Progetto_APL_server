@@ -8,6 +8,7 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
+	"strconv"
 
 	"Progetto_APL/config"
 	"Progetto_APL/models"
@@ -26,6 +27,21 @@ func CreateCode(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	defer file.Close()
+
+	// Recupera l'ID del task dal form data
+	taskIDStr := r.FormValue("taskId")
+	if taskIDStr == "" {
+		log.Println("CODE CONTROLLER: ID del task mancante")
+		http.Error(w, "Task ID is required", http.StatusBadRequest)
+		return
+	}
+
+	taskID, err := strconv.ParseUint(taskIDStr, 10, 32)
+	if err != nil {
+		log.Printf("CODE CONTROLLER: Errore nella conversione dell'ID del task: %v", err)
+		http.Error(w, "Invalid Task ID", http.StatusBadRequest)
+		return
+	}
 
 	// Genera un nome univoco per il file
 	uniqueFileName := uuid.New().String() + filepath.Ext(header.Filename)
@@ -50,7 +66,7 @@ func CreateCode(w http.ResponseWriter, r *http.Request) {
 	// Salva i dettagli del codice nel database
 	newCode := models.Code{
 		Codice:      filePath,
-		Descrizione: "",
+		Descrizione: header.Filename,
 		Statistiche: "",
 	}
 
@@ -58,6 +74,21 @@ func CreateCode(w http.ResponseWriter, r *http.Request) {
 	if result.Error != nil {
 		log.Printf("CODE CONTROLLER: Errore nel salvataggio del codice nel database: %v", result.Error)
 		http.Error(w, "Unable to save code details", http.StatusInternalServerError)
+		return
+	}
+
+	// Aggiorna il task con il nuovo CodeID
+	task := models.Task{}
+	if err := config.DB.First(&task, taskID).Error; err != nil {
+		log.Printf("CODE CONTROLLER: Errore nel recupero del task: %v", err)
+		http.Error(w, "Unable to retrieve task", http.StatusInternalServerError)
+		return
+	}
+
+	task.CodeID = newCode.ID
+	if err := config.DB.Save(&task).Error; err != nil {
+		log.Printf("CODE CONTROLLER: Errore nell'aggiornamento del task con il nuovo CodeID: %v", err)
+		http.Error(w, "Unable to update task with new CodeID", http.StatusInternalServerError)
 		return
 	}
 
@@ -71,21 +102,30 @@ func CreateCode(w http.ResponseWriter, r *http.Request) {
 	log.Println("CODE CONTROLLER: Risposta inviata con successo")
 }
 
-// RunCode esegue il codice Python in modo asincrono e raccoglie le statistiche e l'output
 func RunCode(w http.ResponseWriter, r *http.Request) {
 	log.Println("CODE CONTROLLER: Inizio funzione RunCode")
 
-	// Ottieni l'ID del codice dai parametri della richiesta
-	idStr := r.URL.Query().Get("code_id")
-	if idStr == "" {
-		http.Error(w, "ID del codice mancante", http.StatusBadRequest)
+	// Ottieni l'ID del task dai parametri della richiesta
+	taskIDStr := r.URL.Query().Get("task_id")
+	if taskIDStr == "" {
+		log.Println("CODE CONTROLLER: ID del task mancante")
+		http.Error(w, "ID del task mancante", http.StatusBadRequest)
 		return
 	}
-	log.Printf("CODE CONTROLLER: ID del codice ricevuto: %v", idStr)
+	log.Printf("CODE CONTROLLER: ID del task ricevuto: %v", taskIDStr)
 
-	// Recupera il codice dal database utilizzando l'ID
+	// Recupera il task dal database utilizzando l'ID
+	var task models.Task
+	result := config.DB.First(&task, taskIDStr)
+	if result.Error != nil {
+		log.Printf("CODE CONTROLLER: Errore nel recupero del task dal database: %v", result.Error)
+		http.Error(w, result.Error.Error(), http.StatusInternalServerError)
+		return
+	}
+
+	// Recupera il codice dal database utilizzando il CodeID del task
 	var code models.Code
-	result := config.DB.First(&code, idStr)
+	result = config.DB.First(&code, task.CodeID)
 	if result.Error != nil {
 		log.Printf("CODE CONTROLLER: Errore nel recupero del codice dal database: %v", result.Error)
 		http.Error(w, result.Error.Error(), http.StatusInternalServerError)
@@ -119,11 +159,51 @@ func RunCode(w http.ResponseWriter, r *http.Request) {
 			status = "completato"
 		}
 
+		// Parse the output to extract execution time, errors, and created files
+		var outputData map[string]interface{}
+		if err := json.Unmarshal(output, &outputData); err != nil {
+			log.Printf("CODE CONTROLLER: Errore nel parsing dell'output JSON: %v", err)
+			status = "fallito"
+			errorMsg = "Errore nel parsing dell'output JSON"
+		}
+
+		// Aggiorna le statistiche del codice
+		statistics := "Execution completed successfully"
+		if status == "fallito" {
+			statistics = "Execution failed"
+		}
+
 		config.DB.Model(&models.Execution{}).Where("id = ?", executionID).Updates(models.Execution{
 			Status: status,
 			Output: string(output),
 			Error:  errorMsg,
 		})
+
+		// Aggiorna il campo Statistiche del codice
+		config.DB.Model(&models.Code{}).Where("id = ?", code.ID).Update("Statistiche", statistics)
+
+		// Aggiungi i file creati alla tabella File
+		if createdFiles, ok := outputData["created_files"].([]interface{}); ok {
+			log.Printf("CODE CONTROLLER: Numero di file creati: %d", len(createdFiles))
+			for _, file := range createdFiles {
+				if filePath, ok := file.(string); ok {
+					newFile := models.File{
+						TaskID:      task.ID,
+						Link:        filePath,
+						Descrizione: "File creato dal codice",
+					}
+					if err := config.DB.Create(&newFile).Error; err != nil {
+						log.Printf("CODE CONTROLLER: Errore nella creazione del record del file: %v", err)
+					} else {
+						log.Printf("CODE CONTROLLER: File creato con successo: %v", filePath)
+					}
+				} else {
+					log.Printf("CODE CONTROLLER: Errore nel casting del filePath: %v", file)
+				}
+			}
+		} else {
+			log.Printf("CODE CONTROLLER: Nessun file creato trovato nell'output JSON")
+		}
 	}(execution.ID, code.Codice)
 
 	w.Header().Set("Content-Type", "application/json")
@@ -140,25 +220,92 @@ func RunCode(w http.ResponseWriter, r *http.Request) {
 func GetExecutionStatus(w http.ResponseWriter, r *http.Request) {
 	log.Println("CODE CONTROLLER: Inizio funzione GetExecutionStatus")
 
-	// Ottieni l'ID dell'esecuzione dai parametri della richiesta
-	idStr := r.URL.Query().Get("id")
-	if idStr == "" {
-		http.Error(w, "ID dell'esecuzione mancante", http.StatusBadRequest)
+	// Ottieni l'ID del task dai parametri della richiesta
+	taskIDStr := r.URL.Query().Get("task_id")
+	if taskIDStr == "" {
+		http.Error(w, "ID del task mancante", http.StatusBadRequest)
 		return
 	}
-	log.Printf("CODE CONTROLLER: ID dell'esecuzione ricevuto: %v", idStr)
+	log.Printf("CODE CONTROLLER: ID del task ricevuto: %v", taskIDStr)
 
-	// Recupera l'esecuzione dal database utilizzando l'ID
+	// Recupera il task dal database utilizzando l'ID
+	var task models.Task
+	result := config.DB.First(&task, taskIDStr)
+	if result.Error != nil {
+		log.Printf("CODE CONTROLLER: Errore nel recupero del task dal database: %v", result.Error)
+		http.Error(w, result.Error.Error(), http.StatusInternalServerError)
+		return
+	}
+
+	// Recupera il codice dal database utilizzando il CodeID del task
+	var code models.Code
+	result = config.DB.First(&code, task.CodeID)
+	if result.Error != nil {
+		log.Printf("CODE CONTROLLER: Errore nel recupero del codice dal database: %v", result.Error)
+		http.Error(w, result.Error.Error(), http.StatusInternalServerError)
+		return
+	}
+
+	// Recupera l'ultima esecuzione associata al codice
 	var execution models.Execution
-	result := config.DB.First(&execution, idStr)
+	result = config.DB.Where("code_id = ?", code.ID).Order("id DESC").First(&execution)
 	if result.Error != nil {
 		log.Printf("CODE CONTROLLER: Errore nel recupero dell'esecuzione dal database: %v", result.Error)
 		http.Error(w, result.Error.Error(), http.StatusInternalServerError)
 		return
 	}
 
+	// Restituisci solo lo stato dell'esecuzione
 	w.Header().Set("Content-Type", "application/json")
 	w.WriteHeader(http.StatusOK)
-	json.NewEncoder(w).Encode(execution)
+	json.NewEncoder(w).Encode(map[string]string{"status": execution.Status})
 	log.Println("CODE CONTROLLER: Stato dell'esecuzione recuperato con successo")
+}
+
+// GetCodeStatistics recupera le statistiche del codice associato a un task tramite ID
+func GetCodeStatistics(w http.ResponseWriter, r *http.Request) {
+	log.Println("CODE CONTROLLER: Inizio funzione GetCodeStatistics")
+
+	// Ottieni l'ID del task dai parametri della richiesta
+	taskIDStr := r.URL.Query().Get("task_id")
+	if taskIDStr == "" {
+		http.Error(w, "ID del task mancante", http.StatusBadRequest)
+		return
+	}
+	log.Printf("CODE CONTROLLER: ID del task ricevuto: %v", taskIDStr)
+
+	// Recupera il task dal database utilizzando l'ID
+	var task models.Task
+	result := config.DB.First(&task, taskIDStr)
+	if result.Error != nil {
+		log.Printf("CODE CONTROLLER: Errore nel recupero del task dal database: %v", result.Error)
+		http.Error(w, result.Error.Error(), http.StatusInternalServerError)
+		return
+	}
+
+	// Recupera l'ultima esecuzione del codice associato al task
+	var execution models.Execution
+	result = config.DB.Where("code_id = ?", task.CodeID).First(&execution)
+	if result.Error != nil {
+		log.Printf("CODE CONTROLLER: Errore nel recupero dell'esecuzione dal database: %v", result.Error)
+		http.Error(w, result.Error.Error(), http.StatusInternalServerError)
+		return
+	}
+
+	// Parse the output to extract execution time and errors
+	var outputData map[string]interface{}
+	if err := json.Unmarshal([]byte(execution.Output), &outputData); err != nil {
+		log.Printf("CODE CONTROLLER: Errore nel parsing dell'output JSON: %v", err)
+		http.Error(w, "Errore nel parsing dell'output JSON", http.StatusInternalServerError)
+		return
+	}
+
+	// Restituisci il tempo di esecuzione e gli errori
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(http.StatusOK)
+	json.NewEncoder(w).Encode(map[string]interface{}{
+		"execution_time": outputData["execution_time"],
+		"errors":         outputData["errors"],
+	})
+	log.Println("CODE CONTROLLER: Statistiche dell'esecuzione recuperate con successo")
 }

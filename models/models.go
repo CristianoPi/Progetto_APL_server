@@ -31,12 +31,6 @@ type Execution struct {
 	Error  string `json:"error"`
 }
 
-type File struct {
-	ID          uint   `gorm:"primarykey"`
-	Link        string `json:"link"`
-	Descrizione string `json:"descrizione"`
-}
-
 type Task struct {
 	ID           uint   `gorm:"primarykey"`
 	Descrizione  string `json:"descrizione"`
@@ -46,9 +40,12 @@ type Task struct {
 	IncaricatoID uint   `json:"incaricatoID"`       // Chiave esterna che fa riferimento a User
 	CodeID       uint   `json:"codice_sorgente_id"` // Chiave esterna che fa riferimento a Code
 	ProgettoID   uint   `json:"progettoID"`         // Chiave esterna che fa riferimento a Project
+
 }
 
-type Attached struct {
-	IDFile uint `json:"id_file"` // Chiave esterna che fa riferimento a File
-	IDTask uint `json:"id_task"` // Chiave esterna che fa riferimento a Task
+type File struct {
+	ID          uint   `gorm:"primarykey"`
+	Link        string `json:"link"`
+	Descrizione string `json:"descrizione"`
+	TaskID      uint   `json:"taskID"` // Chiave esterna che fa riferimento a task
 }

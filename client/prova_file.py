@@ -1,6 +1,6 @@
 from time import sleep
 def create_file():
-    with open('prova.txt', 'w') as file:
+    with open('prova2.txt', 'w') as file:
         sleep(5)
         file.write('Questo è un file di prova.')
 

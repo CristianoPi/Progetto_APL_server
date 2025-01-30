@@ -49,13 +49,16 @@ func SetupRouter() *http.ServeMux {
 	// Rotte per gestione dei file
 	mux.Handle("/files", middleware.AuthMiddleware(http.HandlerFunc(controllers.CreateFile)))
 	mux.Handle("/files/list", middleware.AuthMiddleware(http.HandlerFunc(controllers.ListFiles)))
-	mux.Handle("/files/get", middleware.AuthMiddleware(http.HandlerFunc(controllers.GetFileByID)))
+	mux.Handle("/file_by_task/", middleware.AuthMiddleware(http.HandlerFunc(controllers.GetFilesByTaskID)))
+	//mux.Handle("/files/get", middleware.AuthMiddleware(http.HandlerFunc(controllers.GetFileByID)))
 	mux.Handle("/files/delete", middleware.AuthMiddleware(http.HandlerFunc(controllers.DeleteFile)))
+	mux.Handle("/download_attachment", middleware.AuthMiddleware(http.HandlerFunc(controllers.DownloadFile)))
 
 	// Rotte per gestione dei codici
 	mux.Handle("/code", middleware.AuthMiddleware(http.HandlerFunc(controllers.CreateCode)))
 	mux.Handle("/run_code/", middleware.AuthMiddleware(http.HandlerFunc(controllers.RunCode)))
 	mux.Handle("/get_status_code/", middleware.AuthMiddleware(http.HandlerFunc(controllers.GetExecutionStatus)))
+	mux.Handle("/get_statistics/", middleware.AuthMiddleware(http.HandlerFunc(controllers.GetCodeStatistics)))
 
 	return mux
 }
