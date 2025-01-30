@@ -23,6 +23,14 @@ type Code struct {
 	Statistiche string `json:"statistiche"`
 }
 
+type Execution struct {
+	ID     uint   `gorm:"primarykey"`
+	CodeID uint   `json:"code_id"`
+	Status string `json:"status"` // "in corso", "completato", "fallito"
+	Output string `json:"output"`
+	Error  string `json:"error"`
+}
+
 type File struct {
 	ID          uint   `gorm:"primarykey"`
 	Link        string `json:"link"`
@@ -33,10 +41,11 @@ type Task struct {
 	ID           uint   `gorm:"primarykey"`
 	Descrizione  string `json:"descrizione"`
 	Commenti     string `json:"commenti"`
-	AutoreID     uint   `json:"autore"`             // Chiave esterna che fa riferimento a User
-	IncaricatoID *uint  `json:"incaricato"`         // Chiave esterna che fa riferimento a User
-	CodeID       *uint  `json:"codice_sorgente_id"` // Chiave esterna che fa riferimento a Code
-	ProjectID    *uint  `json:"progetto"`           // Chiave esterna che fa riferimento a Project
+	Completato   bool   `json:"completato"`
+	AutoreID     uint   `json:"autoreID"`           // Chiave esterna che fa riferimento a User
+	IncaricatoID uint   `json:"incaricatoID"`       // Chiave esterna che fa riferimento a User
+	CodeID       uint   `json:"codice_sorgente_id"` // Chiave esterna che fa riferimento a Code
+	ProgettoID   uint   `json:"progettoID"`         // Chiave esterna che fa riferimento a Project
 }
 
 type Attached struct {

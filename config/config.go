@@ -19,7 +19,7 @@ func LoadConfig() {
 	}
 
 	// Migrazione delle tabelle
-	err = DB.AutoMigrate(&models.User{}, &models.Project{}, &models.Code{}, &models.File{}, &models.Task{}, &models.Attached{})
+	err = DB.AutoMigrate(&models.User{}, &models.Project{}, &models.Code{}, &models.File{}, &models.Task{}, &models.Attached{}, &models.Execution{})
 	if err != nil {
 		log.Fatal("Failed to migrate database:", err)
 	}

@@ -13,6 +13,7 @@ import (
 	"net/http/cookiejar"
 	"os"
 	"path/filepath"
+	"strconv"
 
 	"golang.org/x/crypto/bcrypt"
 
@@ -50,7 +51,10 @@ func main() {
 		fmt.Println("11. Elenca i file")
 		fmt.Println("12. Recupera un file tramite ID")
 		fmt.Println("13. Elimina un file")
-		fmt.Println("14. Esci")
+		fmt.Println("14. Importa Codice")
+		fmt.Println("15. Esegui Codice")
+		fmt.Println("16. Vedi stato esecuzione")
+		fmt.Println("17. Esci")
 		fmt.Print("Scegli un'opzione: ")
 
 		var choice int
@@ -84,8 +88,15 @@ func main() {
 		case 13:
 			deleteFile(client, baseURL)
 		case 14:
+			createCode(client, baseURL)
+		case 15:
+			runCode(client, baseURL)
+		case 16:
+			getExecutionStatus(client, baseURL)
+		case 17:
 			fmt.Println("Uscita...")
 			return
+
 		default:
 			fmt.Println("Opzione non valida. Riprova.")
 		}
@@ -121,12 +132,12 @@ func createUser(client *http.Client, baseURL string) {
 	defer resp.Body.Close()
 
 	if resp.StatusCode != http.StatusCreated {
-		log.Fatalf("Failed to create user: %v", resp.Status)
+		body, _ := ioutil.ReadAll(resp.Body)
+		log.Fatalf("Failed to create user: %s", body)
 	}
 
 	fmt.Println("User created successfully")
 }
-
 func getUser(client *http.Client, baseURL string) {
 	var email string
 	fmt.Print("Inserisci l'email dell'utente: ")
@@ -275,32 +286,50 @@ func createTask(client *http.Client, baseURL string) {
 	var newTask models.Task
 	fmt.Print("Inserisci la descrizione del task: ")
 	fmt.Scan(&newTask.Descrizione)
-
-	// Recupera l'ID dell'utente dalla sessione
-	userID, err := getUserIDFromSession(client, baseURL)
-	if err != nil {
-		log.Fatalf("Unable to get user ID from session: %v", err)
+	fmt.Print("Inserisci i commenti del task: ")
+	fmt.Scan(&newTask.Commenti)
+	fmt.Print("Inserisci l'ID del progetto: ")
+	fmt.Scan(&newTask.ProgettoID)
+	fmt.Print("Inserisci l'ID dell'incaricato (opzionale, premi invio per saltare): ")
+	var incaricatoID string
+	fmt.Scan(&incaricatoID)
+	if incaricatoID != "" {
+		id, err := strconv.Atoi(incaricatoID)
+		if err == nil {
+			uid := uint(id)
+			newTask.IncaricatoID = uid
+		}
 	}
-	newTask.AutoreID = userID
 
 	body, err := json.Marshal(newTask)
 	if err != nil {
 		log.Fatalf("Unable to marshal task: %v", err)
 	}
 
-	resp, err := client.Post(baseURL+"/tasks", "application/json", bytes.NewBuffer(body))
+	req, err := http.NewRequest("POST", baseURL+"/task", bytes.NewBuffer(body))
+	if err != nil {
+		log.Fatalf("Unable to create request: %v", err)
+	}
+	req.Header.Set("Content-Type", "application/json")
+
+	resp, err := client.Do(req)
 	if err != nil {
 		log.Fatalf("Unable to send request: %v", err)
 	}
 	defer resp.Body.Close()
 
 	if resp.StatusCode != http.StatusCreated {
-		log.Fatalf("Failed to create task: %v", resp.Status)
+		body, _ := ioutil.ReadAll(resp.Body)
+		log.Fatalf("Failed to create task: %s", body)
 	}
 
-	fmt.Println("Task created successfully")
-}
+	var createdTask models.Task
+	if err := json.NewDecoder(resp.Body).Decode(&createdTask); err != nil {
+		log.Fatalf("Unable to decode response: %v", err)
+	}
 
+	fmt.Printf("Task creato con successo: %+v\n", createdTask)
+}
 func listTasks(client *http.Client, baseURL string) {
 	resp, err := client.Get(baseURL + "/tasks")
 	if err != nil {
@@ -365,10 +394,6 @@ func createFile(client *http.Client, baseURL string) {
 	if err != nil {
 		log.Fatalf("Unable to copy file: %v", err)
 	}
-	fmt.Print("Inserisci la descrizione del file: ")
-	var descrizione string
-	fmt.Scan(&descrizione)
-	writer.WriteField("descrizione", descrizione)
 	writer.Close()
 
 	req, err := http.NewRequest("POST", baseURL+"/files", body)
@@ -383,17 +408,17 @@ func createFile(client *http.Client, baseURL string) {
 	}
 	defer resp.Body.Close()
 
-	if resp.StatusCode != http.StatusOK {
-		log.Fatalf("Failed to create file: %v", resp.Status)
+	if resp.StatusCode != http.StatusCreated {
+		body, _ := ioutil.ReadAll(resp.Body)
+		log.Fatalf("Failed to create file: %s", body)
 	}
 
-	var newFile models.File
-	err = json.NewDecoder(resp.Body).Decode(&newFile)
+	responseBody, err := ioutil.ReadAll(resp.Body)
 	if err != nil {
-		log.Fatalf("Unable to decode response: %v", err)
+		log.Fatalf("Unable to read response: %v", err)
 	}
 
-	fmt.Printf("File created: %+v\n", newFile)
+	fmt.Printf("File created successfully: %s\n", string(responseBody))
 }
 
 func listFiles(client *http.Client, baseURL string) {
@@ -481,4 +506,107 @@ func getUserIDFromSession(client *http.Client, baseURL string) (uint, error) {
 	}
 
 	return user.ID, nil
+}
+
+func createCode(client *http.Client, baseURL string) {
+	var filePath string
+	fmt.Print("Inserisci il percorso del file di codice: ")
+	fmt.Scan(&filePath)
+
+	file, err := os.Open(filePath)
+	if err != nil {
+		log.Fatalf("Unable to open file: %v", err)
+	}
+	defer file.Close()
+
+	body := &bytes.Buffer{}
+	writer := multipart.NewWriter(body)
+	part, err := writer.CreateFormFile("code", filepath.Base(file.Name()))
+	if err != nil {
+		log.Fatalf("Unable to create form file: %v", err)
+	}
+	_, err = io.Copy(part, file)
+	if err != nil {
+		log.Fatalf("Unable to copy file: %v", err)
+	}
+	writer.Close()
+
+	req, err := http.NewRequest("POST", baseURL+"/code", body)
+	if err != nil {
+		log.Fatalf("Unable to create request: %v", err)
+	}
+	req.Header.Set("Content-Type", writer.FormDataContentType())
+
+	resp, err := client.Do(req)
+	if err != nil {
+		log.Fatalf("Unable to send request: %v", err)
+	}
+	defer resp.Body.Close()
+
+	if resp.StatusCode != http.StatusCreated {
+		body, _ := ioutil.ReadAll(resp.Body)
+		log.Fatalf("Failed to create code: %s", body)
+	}
+
+	responseBody, err := ioutil.ReadAll(resp.Body)
+	if err != nil {
+		log.Fatalf("Unable to read response: %v", err)
+	}
+
+	fmt.Printf("Code created successfully: %s\n", string(responseBody))
+}
+
+func runCode(client *http.Client, baseURL string) {
+	var codeID string
+	fmt.Print("Inserisci l'ID del codice da eseguire: ")
+	fmt.Scan(&codeID)
+
+	req, err := http.NewRequest("POST", baseURL+"/run_code?code_id="+codeID, nil)
+	if err != nil {
+		log.Fatalf("Unable to create request: %v", err)
+	}
+
+	resp, err := client.Do(req)
+	if err != nil {
+		log.Fatalf("Unable to send request: %v", err)
+	}
+	defer resp.Body.Close()
+
+	if resp.StatusCode != http.StatusAccepted {
+		body, _ := ioutil.ReadAll(resp.Body)
+		log.Fatalf("Failed to start code execution: %s", body)
+	}
+
+	var response map[string]interface{}
+	err = json.NewDecoder(resp.Body).Decode(&response)
+	if err != nil {
+		log.Fatalf("Unable to decode response: %v", err)
+	}
+
+	fmt.Printf("Code execution started: %+v\n", response)
+}
+
+func getExecutionStatus(client *http.Client, baseURL string) {
+	var executionID string
+	fmt.Print("Inserisci l'ID dell'esecuzione: ")
+	fmt.Scan(&executionID)
+
+	resp, err := client.Get(baseURL + "/get_status_code/?id=" + executionID)
+	if err != nil {
+		log.Fatalf("Unable to send request: %v", err)
+	}
+	defer resp.Body.Close()
+
+	if resp.StatusCode != http.StatusOK {
+		body, _ := ioutil.ReadAll(resp.Body)
+		log.Fatalf("Failed to get execution status: %s", body)
+	}
+
+	var execution models.Execution
+	err = json.NewDecoder(resp.Body).Decode(&execution)
+	if err != nil {
+		log.Fatalf("Unable to decode response: %v", err)
+	}
+
+	fmt.Printf("Execution status: %+v\n", execution)
 }

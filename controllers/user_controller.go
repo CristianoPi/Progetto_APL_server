@@ -433,3 +433,25 @@ func ForgotPassword(w http.ResponseWriter, r *http.Request) {
 	json.NewEncoder(w).Encode(true)
 	log.Println("USER CONTROLLER: Risposta inviata con successo")
 }
+
+// GetAllUsers recupera tutti gli utenti dal database
+func GetAllUsers(w http.ResponseWriter, r *http.Request) {
+	log.Println("USER CONTROLLER: Inizio funzione GetAllUsers")
+
+	var users []models.User
+	result := config.DB.Find(&users)
+	if result.Error != nil {
+		log.Printf("USER CONTROLLER: Errore nel recupero degli utenti dal database: %v", result.Error)
+		http.Error(w, result.Error.Error(), http.StatusInternalServerError)
+		return
+	}
+
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(http.StatusOK)
+	if err := json.NewEncoder(w).Encode(users); err != nil {
+		log.Printf("USER CONTROLLER: Errore nella codifica della risposta JSON: %v", err)
+		http.Error(w, "Errore nella codifica della risposta JSON", http.StatusInternalServerError)
+		return
+	}
+	log.Println("USER CONTROLLER: Utenti recuperati con successo")
+}
