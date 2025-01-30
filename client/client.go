@@ -521,7 +521,7 @@ func createCode(client *http.Client, baseURL string) {
 
 	body := &bytes.Buffer{}
 	writer := multipart.NewWriter(body)
-	part, err := writer.CreateFormFile("code", filepath.Base(file.Name()))
+	part, err := writer.CreateFormFile("file", filepath.Base(file.Name()))
 	if err != nil {
 		log.Fatalf("Unable to create form file: %v", err)
 	}

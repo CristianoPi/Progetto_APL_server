@@ -1,5 +1,0 @@
-Traceback (most recent call last):
-  File "C:\Users\asus\OneDrive - Università degli Studi di Catania\UNI\MAGISTRALE\SECONDO ANNO\Advanced Programming Languages\Progetto\Progetto_APL\uploads_code\d2d38907-88eb-4242-9bda-aac91c7f7072.py", line 5, in <module>
-    name = input("Enter your name: ")
-           ^^^^^^^^^^^^^^^^^^^^^^^^^^
-EOFError: EOF when reading a line

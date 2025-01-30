@@ -19,7 +19,7 @@ import (
 func CreateCode(w http.ResponseWriter, r *http.Request) {
 	log.Println("CODE CONTROLLER: Inizio funzione CreateCode")
 
-	file, header, err := r.FormFile("code")
+	file, header, err := r.FormFile("file")
 	if err != nil {
 		log.Printf("CODE CONTROLLER: Errore nel recupero del file: %v", err)
 		http.Error(w, "Code file is required", http.StatusBadRequest)
