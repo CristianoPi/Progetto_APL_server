@@ -1,4 +1,4 @@
-# Progetto APL
+# Progetto APL Server
 
 Questo progetto è un'applicazione web scritta in Go che utilizza MySQL come database. 
 L'applicazione gestisce e salva i progetti che possono essere creati e assegnati a diversi utenti.
