@@ -7,13 +7,10 @@ import subprocess
 def execute_code(file_path):
     start_time = time.time()
     base_name = os.path.splitext(os.path.basename(file_path))[0]
-    current_dir = os.path.dirname(os.path.abspath(file_path))
-
-    output_file_path = os.path.join(current_dir, f"{base_name}_output.txt")
-    error_file_path = os.path.join(current_dir, f"{base_name}_error.txt")
+    script_dir = os.path.dirname(os.path.abspath(__file__))  # Directory in cui si trova l'executor
 
     # Ottieni i file esistenti e i loro timestamp prima dell'esecuzione
-    existing_files = {f: os.path.getmtime(os.path.join(current_dir, f)) for f in os.listdir(current_dir)}
+    existing_files = {f: os.path.getmtime(os.path.join(script_dir, f)) for f in os.listdir(script_dir)}
 
     try:
         # Esegui il subprocess
@@ -22,27 +19,25 @@ def execute_code(file_path):
 
         # Controlla i file creati dopo l'esecuzione
         new_files = []
-        for f in os.listdir(current_dir):
-            file_path = os.path.join(current_dir, f)
+        for f in os.listdir(script_dir):
+            file_path = os.path.join(script_dir, f)
             if f not in existing_files or os.path.getmtime(file_path) > existing_files[f]:
                 new_files.append(f)
 
         result_data = {
             "execution_time": execution_time,
             "errors": result.stderr if result.returncode != 0 else None,
-            "created_files": new_files
+            "created_files": new_files,
+            "stdout": result.stdout
         }
     except Exception as e:
         execution_time = time.time() - start_time
         result_data = {
             "execution_time": execution_time,
             "errors": str(e),
-            "created_files": []
+            "created_files": [],
+            "stdout": "",
         }
-
-    # Scrivi il risultato nel file di output
-    with open(output_file_path, 'w') as output_file:
-        json.dump(result_data, output_file)
 
     return result_data
 

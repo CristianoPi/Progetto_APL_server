@@ -9,6 +9,7 @@ import (
 	"os/exec"
 	"path/filepath"
 	"strconv"
+	"strings"
 
 	"Progetto_APL/config"
 	"Progetto_APL/models"
@@ -45,7 +46,7 @@ func CreateCode(w http.ResponseWriter, r *http.Request) {
 
 	// Genera un nome univoco per il file
 	uniqueFileName := uuid.New().String() + filepath.Ext(header.Filename)
-	filePath := filepath.Join("uploads_code", uniqueFileName)
+	filePath := filepath.Join("file_code_py", uniqueFileName)
 
 	// Salva il file nel server
 	out, err := os.Create(filePath)
@@ -102,6 +103,7 @@ func CreateCode(w http.ResponseWriter, r *http.Request) {
 	log.Println("CODE CONTROLLER: Risposta inviata con successo")
 }
 
+// RunCode esegue il codice Python in modo asincrono
 func RunCode(w http.ResponseWriter, r *http.Request) {
 	log.Println("CODE CONTROLLER: Inizio funzione RunCode")
 
@@ -144,10 +146,23 @@ func RunCode(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	// Rimuovi "file_code_py\" da codePath
+	log.Printf("CODE CONTROLLER: Codice da eseguire: %s", code.Codice)
+	relativeCodePath := strings.TrimPrefix(code.Codice, "file_code_py\\")
+	log.Printf("CODE CONTROLLER: Percorso relativo del codice: %s", relativeCodePath)
+
 	// Esegui il codice Python in modo asincrono
 	go func(executionID uint, codePath string) {
+		log.Printf("CODE CONTROLLER: Esecuzione del comando: python file_code_py/executor.py %s", codePath)
 		cmd := exec.Command("python", "executor.py", codePath)
+		cmd.Dir = "C:/Users/asus/OneDrive - Università degli Studi di Catania/UNI/MAGISTRALE/SECONDO ANNO/Advanced Programming Languages/Progetto/Progetto_APL/file_code_py" // Assicurati che questo sia il percorso corretto
 		output, err := cmd.CombinedOutput()
+
+		// Log dell'output e dell'errore
+		log.Printf("CODE CONTROLLER: Output del comando: %s", string(output))
+		if err != nil {
+			log.Printf("CODE CONTROLLER: Errore del comando: %v", err)
+		}
 
 		// Aggiorna lo stato dell'esecuzione nel database
 		var status string
@@ -187,10 +202,11 @@ func RunCode(w http.ResponseWriter, r *http.Request) {
 			log.Printf("CODE CONTROLLER: Numero di file creati: %d", len(createdFiles))
 			for _, file := range createdFiles {
 				if filePath, ok := file.(string); ok {
+					log.Printf("CODE CONTROLLER: Aggiungendo file: %s", filePath)
 					newFile := models.File{
 						TaskID:      task.ID,
-						Link:        filePath,
-						Descrizione: "File creato dal codice",
+						Link:        "file_code_py/" + filePath,
+						Descrizione: filePath,
 					}
 					if err := config.DB.Create(&newFile).Error; err != nil {
 						log.Printf("CODE CONTROLLER: Errore nella creazione del record del file: %v", err)
@@ -204,7 +220,7 @@ func RunCode(w http.ResponseWriter, r *http.Request) {
 		} else {
 			log.Printf("CODE CONTROLLER: Nessun file creato trovato nell'output JSON")
 		}
-	}(execution.ID, code.Codice)
+	}(execution.ID, relativeCodePath)
 
 	w.Header().Set("Content-Type", "application/json")
 	w.WriteHeader(http.StatusAccepted)
@@ -308,4 +324,52 @@ func GetCodeStatistics(w http.ResponseWriter, r *http.Request) {
 		"errors":         outputData["errors"],
 	})
 	log.Println("CODE CONTROLLER: Statistiche dell'esecuzione recuperate con successo")
+}
+
+// GetResults recupera l'output dell'esecuzione del codice associato a un task tramite ID
+func GetResults(w http.ResponseWriter, r *http.Request) {
+	log.Println("CODE CONTROLLER: Inizio funzione GetResults")
+
+	// Ottieni l'ID del task dai parametri della richiesta
+	taskIDStr := r.URL.Query().Get("task_id")
+	if taskIDStr == "" {
+		http.Error(w, "ID del task mancante", http.StatusBadRequest)
+		return
+	}
+	log.Printf("CODE CONTROLLER: ID del task ricevuto: %v", taskIDStr)
+
+	// Recupera il task dal database utilizzando l'ID
+	var task models.Task
+	result := config.DB.First(&task, taskIDStr)
+	if result.Error != nil {
+		log.Printf("CODE CONTROLLER: Errore nel recupero del task dal database: %v", result.Error)
+		http.Error(w, result.Error.Error(), http.StatusInternalServerError)
+		return
+	}
+
+	// Recupera l'ultima esecuzione del codice associato al task
+	var execution models.Execution
+	result = config.DB.Where("code_id = ?", task.CodeID).First(&execution)
+	if result.Error != nil {
+		log.Printf("CODE CONTROLLER: Errore nel recupero dell'esecuzione dal database: %v", result.Error)
+		http.Error(w, result.Error.Error(), http.StatusInternalServerError)
+		return
+	}
+
+	// Parse the output to extract the output and created files
+	var outputData map[string]interface{}
+	if err := json.Unmarshal([]byte(execution.Output), &outputData); err != nil {
+		log.Printf("CODE CONTROLLER: Errore nel parsing dell'output JSON: %v", err)
+		http.Error(w, "Errore nel parsing dell'output JSON", http.StatusInternalServerError)
+		return
+	}
+
+	// Restituisci l'output e i file creati
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(http.StatusOK)
+	json.NewEncoder(w).Encode(map[string]interface{}{
+		"output":        outputData["stdout"],
+		"created_files": outputData["created_files"],
+	})
+	log.Println("CODE CONTROLLER: Output e file creati dell'esecuzione recuperati con successo")
 }

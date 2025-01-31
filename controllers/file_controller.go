@@ -6,7 +6,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"io"
-	"io/ioutil"
+
 	"log"
 	"net/http"
 	"os"
@@ -51,7 +51,7 @@ func CreateFile(w http.ResponseWriter, r *http.Request) {
 
 	// Genera un nome univoco per il file
 	uniqueFileName := uuid.New().String() + filepath.Ext(header.Filename)
-	filePath := filepath.Join("uploads", uniqueFileName)
+	filePath := filepath.Join("file_code_py", uniqueFileName)
 
 	// Salva il file nel server
 	out, err := os.Create(filePath)
@@ -94,31 +94,31 @@ func CreateFile(w http.ResponseWriter, r *http.Request) {
 	log.Println("FILE CONTROLLER: Risposta inviata con successo")
 }
 
-// ListFiles elenca tutti i file caricati
-func ListFiles(w http.ResponseWriter, r *http.Request) {
-	log.Println("FILE CONTROLLER: Inizio funzione ListFiles")
+// // ListFiles elenca tutti i file caricati
+// func ListFiles(w http.ResponseWriter, r *http.Request) {
+// 	log.Println("FILE CONTROLLER: Inizio funzione ListFiles")
 
-	files, err := ioutil.ReadDir("uploads")
-	if err != nil {
-		log.Printf("FILE CONTROLLER: Errore nella lettura della directory: %v", err)
-		http.Error(w, "Unable to list files", http.StatusInternalServerError)
-		return
-	}
+// 	files, err := ioutil.ReadDir("uploads")
+// 	if err != nil {
+// 		log.Printf("FILE CONTROLLER: Errore nella lettura della directory: %v", err)
+// 		http.Error(w, "Unable to list files", http.StatusInternalServerError)
+// 		return
+// 	}
 
-	var fileList []string
-	for _, file := range files {
-		fileList = append(fileList, file.Name())
-	}
+// 	var fileList []string
+// 	for _, file := range files {
+// 		fileList = append(fileList, file.Name())
+// 	}
 
-	w.Header().Set("Content-Type", "application/json")
-	if err := json.NewEncoder(w).Encode(fileList); err != nil {
-		log.Printf("FILE CONTROLLER: Errore nella codifica della risposta JSON: %v", err)
-		http.Error(w, "Unable to encode response", http.StatusInternalServerError)
-		return
-	}
+// 	w.Header().Set("Content-Type", "application/json")
+// 	if err := json.NewEncoder(w).Encode(fileList); err != nil {
+// 		log.Printf("FILE CONTROLLER: Errore nella codifica della risposta JSON: %v", err)
+// 		http.Error(w, "Unable to encode response", http.StatusInternalServerError)
+// 		return
+// 	}
 
-	log.Println("FILE CONTROLLER: Lista dei file inviata con successo")
-}
+// 	log.Println("FILE CONTROLLER: Lista dei file inviata con successo")
+// }
 
 // DeleteFile elimina un file tramite ID
 func DeleteFile(w http.ResponseWriter, r *http.Request) {
@@ -132,7 +132,7 @@ func DeleteFile(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	filePath := filepath.Join("uploads", id)
+	filePath := filepath.Join("file_code_py", id)
 	if err := os.Remove(filePath); err != nil {
 		log.Printf("FILE CONTROLLER: Errore nell'eliminazione del file: %v", err)
 		http.Error(w, "Unable to delete file", http.StatusInternalServerError)
